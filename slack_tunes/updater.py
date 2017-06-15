@@ -8,6 +8,7 @@ import urllib2
 
 PY3 = sys.version_info[0] == 3
 bad_chars = str("").join([chr(i) for i in range(128, 256)])  # ascii dammit!
+status_emoji = ':musical_note:'
 if PY3:
     translation_table = dict((ord(c), None) for c in bad_chars)
     unicode = str
@@ -30,13 +31,17 @@ def asciidammit(s):
 
 
 def osascript(player, command):
-    command = 'tell application "{0}" to {1} as string'.format(
+    arguments = '-e \'tell application "{0}" to {1} as string\''.format(
         player,
         command
     )
-    command = 'osascript -e \'{0}\''.format(command)
-    return subprocess.check_output(command, shell=True).strip()
+    return run_osascript(arguments)
 
+
+def run_osascript(arguments):
+    shell_command = 'osascript {0}'.format(arguments)
+    return subprocess.check_output(shell_command, shell=True).strip()
+    
 
 def is_running(player):
     command = 'if application "{0}" is running then "running"'.format(
@@ -51,10 +56,8 @@ def is_running(player):
 
 def update_status(is_playing, text=None, tokens=None):
     status_text = ''
-    status_emoji = ''
     if is_playing:
         status_text = text
-        status_emoji = ':musical_note:'
 
     if tokens is None:
         return
@@ -87,6 +90,8 @@ def update_status(is_playing, text=None, tokens=None):
 
 
 def spotify_song():
+    global status_emoji
+    status_emoji = ':spotify:'
     if not is_running('Spotify'):
         return None
 
@@ -95,8 +100,36 @@ def spotify_song():
     except subprocess.CalledProcessError:
         return None
 
+def soundcloud_song():
+    global status_emoji
+    status_emoji = ':soundcloud:'
+    if not is_running('Google Chrome'):
+        return None
+
+    try:
+        arguments = """<<EOF
+            tell application "Google Chrome"
+                repeat with t in tabs of windows
+                    tell t
+                        if URL starts with "https://soundcloud.com" then
+                            set track to execute javascript "playing = document.getElementsByClassName('playbackSoundBadge__titleLink')[0]; if (playing) { playing.title } else { '' }"
+                            return track
+                        end if
+                    end tell
+                end repeat
+            end tell
+            EOF"""
+        output = run_osascript(arguments)
+        if output == '' or output == 'eof':
+            return None
+        else:
+            return output
+    except subprocess.CalledProcessError:
+        return None
 
 def itunes_song():
+    global status_emoji
+    status_emoji = ':musical_note:'
     if not is_running('iTunes'):
         return None
 
@@ -107,9 +140,7 @@ def itunes_song():
 
 
 def check_song(old_status=None, first_run=False, tokens=None):
-    current_status = spotify_song()
-    if not current_status:
-        current_status = itunes_song()
+    current_status = spotify_song() or soundcloud_song() or itunes_song()
 
     if current_status:
         current_status = asciidammit(current_status)
