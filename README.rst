@@ -1,5 +1,6 @@
 python-slack-tunes
 --------------------
+Eric 
 
 send slack music notifications from itunes or spotify
 
